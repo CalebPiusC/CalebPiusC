@@ -71,14 +71,13 @@ Status: `active` · [github.com/CalebPiusC/selvora](https://github.com/CalebPius
 
 ---
 
-<sub>`X` [@YOUR_X_HANDLE](https://x.com/YOUR_X_HANDLE) &nbsp;·&nbsp; `LinkedIn` [YOUR_LINKEDIN](https://www.linkedin.com/in/YOUR_LINKEDIN) &nbsp;·&nbsp; `Email` [YOUR_EMAIL](mailto:YOUR_EMAIL)</sub>
+<sub>`X` [@Venom404X](https://x.com/Venom404X) &nbsp;·&nbsp; `LinkedIn` [YOUR_LINKEDIN](https://www.linkedin.com/in/YOUR_LINKEDIN) &nbsp;·&nbsp; `Email` [calebpius101@gmail.com](mailto:calebpius101@gmail.com)</sub>
 
 <sub><samp>VENOM · BUILD. LEARN. EVOLVE.</samp> &nbsp;·&nbsp; Portfolio → [YOUR_PORTFOLIO_URL](https://YOUR_PORTFOLIO_URL)</sub>
 
 <!--
 Maintainer notes (not rendered):
-- Placeholders to replace: YOUR_X_HANDLE, YOUR_LINKEDIN, YOUR_EMAIL,
-  YOUR_PORTFOLIO_URL.
+- Placeholders left to replace: YOUR_LINKEDIN, YOUR_PORTFOLIO_URL.
 - VENOM is the building identity and appears as text only: the tagline line
   above, the header animation, and the footer. No illustrative artwork.
 - ORBIT is described as a fork of opencode. Update the card's meta line and
