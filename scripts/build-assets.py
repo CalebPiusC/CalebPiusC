@@ -97,6 +97,23 @@ ICONS_DIR = ASSETS / "icons"
 WIDTH = 880
 
 # ---------------------------------------------------------------------------
+# Tech-stack row metrics. These are the knobs for row height and density:
+# the row image keeps its 880px width, so the viewBox height alone decides
+# how tall the image sits in the README.
+# ---------------------------------------------------------------------------
+ICON_SIZE = 44        # icon box, in viewBox units (1 unit = 1px at full width)
+LABEL_GAP = 8         # vertical gap between the icon box and its text label
+ROW_PADDING = 7       # space above each icon box and below each label
+LABEL_FONT = 12       # monospace label size; 11-12 keeps 9px+ on tablets
+GRID_COLUMNS = 7      # fixed track count so icons align vertically across rows
+LABEL_X = 40          # category label
+ICONS_X0, ICONS_X1 = 196, 840
+
+# Derived: label baseline, then total row height.
+LABEL_BASELINE = ROW_PADDING + ICON_SIZE + LABEL_GAP + round(LABEL_FONT * 0.78)
+ROW_HEIGHT = LABEL_BASELINE + 3 + ROW_PADDING
+
+# ---------------------------------------------------------------------------
 # Tech stack. slug=None means "no Simple Icons entry" -> text-only tile.
 # Verified against simple-icons/simple-icons: sql, asyncpg, playwright and
 # mypy have no icon (mysql/sqlite are different products and are NOT used
@@ -519,53 +536,52 @@ def build_orbit_card(mode: str, pal: dict) -> str:
 
 def build_stack_row(category: str, items: list, mode: str, pal: dict,
                     cache: dict[str, list[str]]) -> str:
-    label_x, icons_x0, icons_x1 = 40, 196, 840
-    cell_w = (icons_x1 - icons_x0) / len(items)
-    icon_size = 44
-    icon_y = 30
-    label_y = 100
+    """One category row on a fixed GRID_COLUMNS track, so columns line up."""
+    cell_w = (ICONS_X1 - ICONS_X0) / GRID_COLUMNS
+    label_y = LABEL_BASELINE
     cells = []
     for idx, (label, slug) in enumerate(items):
-        cx = icons_x0 + idx * cell_w
-        center = cx + cell_w / 2
+        center = ICONS_X0 + (idx + 0.5) * cell_w
         caption = (
             f'<text x="{center:g}" y="{label_y}" text-anchor="middle" '
-            f'font-family="{MONO}" font-size="11" fill="{pal["muted"]}">'
-            f"{esc(label)}</text>"
+            f'font-family="{MONO}" font-size="{LABEL_FONT}" '
+            f'fill="{pal["muted"]}">{esc(label)}</text>'
         )
         if slug is not None:
             fill = themed(BRAND[label], mode)
             paths = "".join(f'<path d="{esc(d)}" fill="{fill}"/>'
                             for d in cache[slug])
-            scale = icon_size / 24
-            tx = center - icon_size / 2
+            scale = ICON_SIZE / 24
+            tx = center - ICON_SIZE / 2
             cells.append(
-                f'<g transform="translate({tx:g} {icon_y}) scale({scale:g})">'
+                f'<g transform="translate({tx:g} {ROW_PADDING}) scale({scale:g})">'
                 f"{paths}</g>" + caption
             )
         else:
             # No Simple Icons mark exists: a monogram tile in the same box and
             # weight as the real icons. Never an empty tile, never a stand-in.
             text = MONOGRAM[label]
-            tile_w = max(icon_size, round(len(text) * 7.8 + 18))
+            tile_w = max(ICON_SIZE, round(len(text) * 7.8 + 18))
             cells.append(
-                f'<rect x="{center - tile_w / 2:g}" y="{icon_y}" '
-                f'width="{tile_w}" height="{icon_size}" rx="10" '
+                f'<rect x="{center - tile_w / 2:g}" y="{ROW_PADDING}" '
+                f'width="{tile_w}" height="{ICON_SIZE}" rx="10" '
                 f'fill="none" stroke="{pal["tile"]}" stroke-width="1.2"/>'
-                f'<text x="{center:g}" y="{icon_y + icon_size / 2 + 4.5:g}" '
+                f'<text x="{center:g}" '
+                f'y="{ROW_PADDING + ICON_SIZE / 2 + 4.5:g}" '
                 f'text-anchor="middle" font-family="{MONO}" font-size="13" '
                 f'fill="{pal["fg"]}">{esc(text)}</text>' + caption
             )
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} 120" '
-        f'width="{WIDTH}" height="120" role="img">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {ROW_HEIGHT}" '
+        f'width="{WIDTH}" height="{ROW_HEIGHT}" role="img">'
         f"<title>{esc(category.title())}: "
         f"{esc(', '.join(label for label, _ in items))}</title>"
-        # Small accent tick above the category label: the one place the accent
-        # appears in the icon rows (the icons themselves stay monochrome).
-        f'<rect x="{label_x}" y="46" width="20" height="2" fill="{ACCENT}"/>'
-        f'<text x="{label_x}" y="70" font-family="{MONO}" font-size="13" '
-        f'letter-spacing="2" fill="{pal["faint"]}">{esc(category)}</text>'
+        # Accent rule + category label, vertically centred on the icon band.
+        f'<rect x="{LABEL_X}" y="{round(ROW_HEIGHT / 2 - 13)}" width="20" '
+        f'height="2" fill="{ACCENT}"/>'
+        f'<text x="{LABEL_X}" y="{round(ROW_HEIGHT / 2 + 5)}" '
+        f'font-family="{MONO}" font-size="13" letter-spacing="2" '
+        f'fill="{pal["faint"]}">{esc(category)}</text>'
         + "".join(cells)
         + "</svg>\n"
     )
@@ -603,6 +619,9 @@ def main() -> int:
                 build_stack_row(category, items, mode, pal, cache),
             )
 
+    print(f"\nRow metrics: height={ROW_HEIGHT} viewBox units "
+          f"(was 120), icon={ICON_SIZE}, label={LABEL_FONT}px, "
+          f"grid={GRID_COLUMNS} columns")
     print("\nBrand colour check (contrast vs background, 3:1 minimum):")
     for _c, items in STACK:
         for label, slug in items:
