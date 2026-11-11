@@ -8,7 +8,7 @@ Change ACCENT below and re-run to update every image:
     python3 scripts/build-assets.py --refresh  # re-download icons first
 
 Icons are downloaded from Simple Icons (via api.github.com, falling back to
-raw.githubusercontent.com) into assets/icons/ and recoloured to monochrome.
+raw.githubusercontent.com) into assets/icons/ and recoloured to their brand hex.
 Nothing is fetched at view time: every generated SVG is self-contained.
 """
 
@@ -32,7 +32,7 @@ PALETTES = {
         "muted": "#A8A8A8",
         "faint": "#8C8C8C",
         "border": "#2E2E2E",
-        "icon": "#FFFFFF",
+        "tile": "#3A3A3A",
     },
     "light": {
         "bg": "#FFFFFF",
@@ -40,9 +40,52 @@ PALETTES = {
         "muted": "#555555",
         "faint": "#6E6E6E",
         "border": "#E3E3E3",
-        "icon": "#0D0D0D",
+        "tile": "#CFCFCF",
     },
 }
+
+# ---------------------------------------------------------------------------
+# Brand colours, one entry per technology (Simple Icons brand hex, taken from
+# simple-icons data/simple-icons.json). None = no Simple Icons mark exists, so
+# the icon row draws a monogram tile instead of borrowing an unrelated logo.
+# ---------------------------------------------------------------------------
+BRAND = {
+    "TypeScript": "#3178C6",
+    "Python": "#3776AB",
+    "SQL": None,
+    "Kotlin": "#7F52FF",
+    "JavaScript": "#F7DF1E",
+    "HTML": "#E34F26",
+    "CSS": "#663399",
+    "Next.js": "#000000",
+    "React": "#61DAFB",
+    "Tailwind CSS": "#06B6D4",
+    "shadcn/ui": "#000000",
+    "FastAPI": "#009688",
+    "Pydantic": "#E92063",
+    "asyncpg": None,
+    "Redis": "#FF4438",
+    "PostgreSQL": "#4169E1",
+    "Supabase": "#3FCF8E",
+    "Firebase": "#DD2C00",
+    "Vitest": "#00FF74",
+    "pytest": "#0A9EDC",
+    "Playwright": None,
+    "Ruff": "#D7FF64",
+    "mypy": None,
+    "Docker": "#2496ED",
+    "GitHub Actions": "#2088FF",
+    "Netlify": "#00C7B7",
+}
+
+# Monogram text for technologies with no Simple Icons mark.
+MONOGRAM = {"SQL": "SQL", "asyncpg": "asyncpg", "Playwright": "PW", "mypy": "mypy"}
+
+# Contact row: X uses the Simple Icons mark, Email is drawn here (not a brand).
+CONTACT = [
+    ("x", "X profile", "x", "https://x.com/Venom404X", "#000000"),
+    ("email", "Email Caleb", None, "mailto:calebpius101@gmail.com", "#000000"),
+]
 
 SANS = "-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
 MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
@@ -124,6 +167,41 @@ def write_svg(path: Path, content: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Contrast: keep brand colours only where they stay legible against the theme
+# background, otherwise fall back to white (dark) / black (light).
+# ---------------------------------------------------------------------------
+
+MIN_CONTRAST = 3.0
+
+
+def _rgb(hex_colour: str) -> tuple[float, float, float]:
+    h = hex_colour.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+
+
+def _luminance(hex_colour: str) -> float:
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (lin(c) for c in _rgb(hex_colour))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast_ratio(a: str, b: str) -> float:
+    la, lb = _luminance(a), _luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def themed(brand_hex: str, mode: str) -> str:
+    """Brand colour if it clears MIN_CONTRAST on this theme, else white/black."""
+    fallback = "#FFFFFF" if mode == "dark" else "#000000"
+    if contrast_ratio(brand_hex, PALETTES[mode]["bg"]) >= MIN_CONTRAST:
+        return brand_hex
+    return fallback
+
+
+# ---------------------------------------------------------------------------
 # Icon download + parsing
 # ---------------------------------------------------------------------------
 
@@ -175,21 +253,74 @@ def ensure_icons(refresh: bool) -> dict[str, list[str]]:
                 print(f"  downloading {slug} ...")
                 original.write_text(download_icon(slug), encoding="utf-8")
             cache[slug] = icon_paths(original.read_text(encoding="utf-8"), slug)
+    # Contact marks that come from Simple Icons.
+    for _name, _alt, slug, _href, _hex in CONTACT:
+        if slug is None or slug in cache:
+            continue
+        original = ICONS_DIR / f"{slug}.svg"
+        if refresh or not original.exists():
+            print(f"  downloading {slug} ...")
+            original.write_text(download_icon(slug), encoding="utf-8")
+        cache[slug] = icon_paths(original.read_text(encoding="utf-8"), slug)
     return cache
 
 
 def write_icon_variants(cache: dict[str, list[str]]) -> None:
+    """Standalone brand-coloured icons (sources for the row images)."""
+    slug_to_label = {slug: label for _c, items in STACK for label, slug in items}
     for slug, paths in cache.items():
-        for mode, pal in PALETTES.items():
+        label = slug_to_label.get(slug)
+        if label is None:
+            continue
+        for mode in PALETTES:
+            fill = themed(BRAND[label] or "#000000", mode)
             body = "".join(
-                f'<path d="{esc(d)}" fill="{pal["icon"]}"/>'
-                for d in paths
+                f'<path d="{esc(d)}" fill="{fill}"/>' for d in paths
             )
             svg = (
                 f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
-                f'role="img"><title>{esc(slug)}</title>{body}</svg>\n'
+                f'role="img"><title>{esc(label)}</title>{body}</svg>\n'
             )
             write_svg(ICONS_DIR / f"{slug}-{mode}.svg", svg)
+
+
+# --- contact icons ---------------------------------------------------------
+
+def email_paths() -> list[str]:
+    """A neutral envelope drawn in the same 24x24 box as the brand marks."""
+    return [
+        "M3 5.75h18a.75.75 0 0 1 .75.75v11a.75.75 0 0 1-.75.75H3a.75.75 0 "
+        "0 1-.75-.75v-11A.75.75 0 0 1 3 5.75Z",
+        "M3.4 6.6 12 13.1l8.6-6.5",
+    ]
+
+
+def write_contact_icons(cache: dict[str, list[str]]) -> None:
+    """28px-ready contact marks; X is the Simple Icons glyph, Email is drawn."""
+    for name, _alt, slug, _href, base_hex in CONTACT:
+        for mode, pal in PALETTES.items():
+            fill = themed(base_hex, mode)
+            if slug is not None:
+                body = "".join(
+                    f'<path d="{esc(d)}" fill="{fill}"/>' for d in cache[slug]
+                )
+                svg = (
+                    f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+                    f'role="img"><title>{esc(name)}</title>{body}</svg>\n'
+                )
+            else:
+                # Outline mark: no fill, stroke only.
+                body = "".join(
+                    f'<path d="{esc(d)}" fill="none" stroke="{fill}" '
+                    f'stroke-width="1.7" stroke-linecap="round" '
+                    f'stroke-linejoin="round"/>'
+                    for d in email_paths()
+                )
+                svg = (
+                    f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+                    f'role="img"><title>{esc(name)}</title>{body}</svg>\n'
+                )
+            write_svg(ICONS_DIR / f"{name}-{mode}.svg", svg)
 
 
 # ---------------------------------------------------------------------------
@@ -397,31 +528,33 @@ def build_stack_row(category: str, items: list, mode: str, pal: dict,
     for idx, (label, slug) in enumerate(items):
         cx = icons_x0 + idx * cell_w
         center = cx + cell_w / 2
+        caption = (
+            f'<text x="{center:g}" y="{label_y}" text-anchor="middle" '
+            f'font-family="{MONO}" font-size="11" fill="{pal["muted"]}">'
+            f"{esc(label)}</text>"
+        )
         if slug is not None:
-            paths = "".join(
-                f'<path d="{esc(d)}" fill="{pal["icon"]}"/>'
-                for d in cache[slug]
-            )
+            fill = themed(BRAND[label], mode)
+            paths = "".join(f'<path d="{esc(d)}" fill="{fill}"/>'
+                            for d in cache[slug])
             scale = icon_size / 24
             tx = center - icon_size / 2
             cells.append(
                 f'<g transform="translate({tx:g} {icon_y}) scale({scale:g})">'
-                f"{paths}</g>"
-                f'<text x="{center:g}" y="{label_y}" text-anchor="middle" '
-                f'font-family="{MONO}" font-size="11" fill="{pal["muted"]}">'
-                f"{esc(label)}</text>"
+                f"{paths}</g>" + caption
             )
         else:
-            # No Simple Icons entry: an empty placeholder square keeps the
-            # grid regular, and the name is set at the label baseline in the
-            # same monospace style as every other label. No substitute icon.
+            # No Simple Icons mark exists: a monogram tile in the same box and
+            # weight as the real icons. Never an empty tile, never a stand-in.
+            text = MONOGRAM[label]
+            tile_w = max(icon_size, round(len(text) * 7.8 + 18))
             cells.append(
-                f'<rect x="{center - icon_size / 2:g}" y="{icon_y}" '
-                f'width="{icon_size}" height="{icon_size}" rx="8" '
-                f'fill="none" stroke="{pal["border"]}" stroke-width="1"/>'
-                f'<text x="{center:g}" y="{label_y}" text-anchor="middle" '
-                f'font-family="{MONO}" font-size="11" fill="{pal["muted"]}">'
-                f"{esc(label)}</text>"
+                f'<rect x="{center - tile_w / 2:g}" y="{icon_y}" '
+                f'width="{tile_w}" height="{icon_size}" rx="10" '
+                f'fill="none" stroke="{pal["tile"]}" stroke-width="1.2"/>'
+                f'<text x="{center:g}" y="{icon_y + icon_size / 2 + 4.5:g}" '
+                f'text-anchor="middle" font-family="{MONO}" font-size="13" '
+                f'fill="{pal["fg"]}">{esc(text)}</text>' + caption
             )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} 120" '
@@ -458,6 +591,9 @@ def main() -> int:
     for mode, pal in PALETTES.items():
         write_svg(ASSETS / f"orbit-card-{mode}.svg", build_orbit_card(mode, pal))
 
+    print("Contact icons:")
+    write_contact_icons(cache)
+
     print("Tech-stack rows:")
     for category, items in STACK:
         slug_cat = category.lower()
@@ -467,9 +603,23 @@ def main() -> int:
                 build_stack_row(category, items, mode, pal, cache),
             )
 
+    print("\nBrand colour check (contrast vs background, 3:1 minimum):")
+    for _c, items in STACK:
+        for label, slug in items:
+            if slug is None:
+                continue
+            row = []
+            for mode in ("dark", "light"):
+                brand = BRAND[label]
+                ratio = contrast_ratio(brand, PALETTES[mode]["bg"])
+                used = themed(brand, mode)
+                flag = brand if used == brand else f"{used} (fallback)"
+                row.append(f"{mode}: {ratio:.2f}:1 -> {flag}")
+            print(f"  {label:15} {brand}  " + "  |  ".join(row))
+
     text_only = [label for _c, items in STACK for label, slug in items
                  if slug is None]
-    print(f"\nDone. Text-only (no Simple Icons entry): {', '.join(text_only)}")
+    print(f"\nDone. Monogram tiles (no Simple Icons mark): {', '.join(text_only)}")
     return 0
 
 
