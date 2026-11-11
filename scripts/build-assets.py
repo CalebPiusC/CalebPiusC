@@ -102,6 +102,7 @@ STACK = [
 
 HEADER_LINES = [
     "Hi, I'm Caleb.",
+    "Building as VENOM.",
     "Building ORBIT.",
     "Software Engineering @ OAU.",
     "Building toward AI engineering.",
@@ -221,8 +222,8 @@ def build_header(mode: str, pal: dict) -> str:
     font_size = 32
     char_w = round(font_size * 0.6, 2)   # monospace advance
     x0, y_text = 48, 118
-    total = 18.0
-    slot = total / len(HEADER_LINES)     # 4.5s per line
+    total = 20.0
+    slot = total / len(HEADER_LINES)     # 4.0s per line
     hold = 1.4                           # seconds fully typed before clearing
 
     clips, texts, cursors = [], [], []
@@ -267,7 +268,9 @@ def build_header(mode: str, pal: dict) -> str:
         x_pairs.append((total, x0))
         x_values, x_times = _norm(x_pairs, total)
 
-        blink_until = type_dur + hold
+        # Keep the cursor alive (blinking) for the whole hold, until the
+        # line is cleared at the end of its slot.
+        blink_until = slot - 0.25
         o_pairs: list[tuple[float, float]] = [(0.0, 1.0), (type_dur, 1.0)]
         t, on = type_dur, False
         while t + 0.5 < blink_until:
